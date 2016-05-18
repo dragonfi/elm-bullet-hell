@@ -3,12 +3,13 @@ module Main exposing (..)
 import Html
 import Html.App
 import Html.Attributes as HtmlA
-import Html.Events
 import Svg
 import Svg.Attributes as SvgA
-import Json.Decode
-import Json.Decode exposing (Decoder, (:=))
 import Time
+import Platform.Sub as Sub
+import Mouse
+import Window
+import Task
 
 
 type alias Position =
@@ -18,24 +19,30 @@ type alias Position =
 
 
 type alias Model =
-    { cursor_position : Position, mouse_clicks : Int, input : String }
+    { cursor_position : Position, mouse_clicks : Int, input : String, window_size : Window.Size }
 
 
 type Message
     = Tick Time.Time
     | MouseMove Position
+    | WindowResize Window.Size
     | MouseClicked
     | Change String
+    | Error String
 
 
 subscriptions : Model -> Sub Message
 subscriptions model =
-    Time.every (50 * Time.millisecond) Tick
+    Sub.batch
+        [ Time.every (50 * Time.millisecond) Tick
+        , Mouse.moves MouseMove
+        , Window.resizes WindowResize
+        ]
 
 
-init : ( Model, Cmd msg )
+init : ( Model, Cmd Message )
 init =
-    ( Model (Position 0 0) 0 "", Cmd.none )
+    ( Model (Position 0 0) 0 "" (Window.Size 0 0), Task.perform Error WindowResize Window.size )
 
 
 update : Message -> Model -> ( Model, Cmd msg )
@@ -50,78 +57,49 @@ update msg model =
         Change x ->
             ( { model | input = x }, Cmd.none )
 
+        WindowResize size ->
+            ( { model | window_size = size }, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
-
-
-type alias RawMouseMoveData =
-    { clientX : Int
-    , clientY : Int
-    , offsetX : Int
-    , offsetY : Int
-    }
-
-
-targetValue : Decoder Position
-targetValue =
-    Json.Decode.map translateCoordinates
-        (Json.Decode.object4 RawMouseMoveData
-            ("clientX" := Json.Decode.int)
-            ("clientY" := Json.Decode.int)
-            (Json.Decode.at [ "currentTarget", "offsetLeft" ] Json.Decode.int)
-            (Json.Decode.at [ "currentTarget", "offsetTop" ] Json.Decode.int)
-        )
-
-
-translateCoordinates : RawMouseMoveData -> Position
-translateCoordinates { clientX, clientY, offsetX, offsetY } =
-    Position (clientX - offsetX) (clientY - offsetY)
-
-
-onMouseMove : (Position -> msg) -> Html.Attribute msg
-onMouseMove tag =
-    Html.Events.on "mousemove" (Json.Decode.map tag targetValue)
 
 
 view : Model -> Html.Html Message
 view model =
     Html.div []
-        [ Html.div [] [ Html.text "Non-capturing div" ]
+        [ Svg.svg
+            [ SvgA.width <| toString model.window_size.width
+            , SvgA.height <| toString model.window_size.height
+            , SvgA.viewBox
+                <| "0 0 "
+                ++ (toString model.window_size.width)
+                ++ " "
+                ++ (toString model.window_size.height)
+            ]
+            [ Svg.rect
+                [ SvgA.x "0"
+                , SvgA.y "0"
+                , SvgA.width <| toString model.window_size.width
+                , SvgA.height <| toString model.window_size.height
+                , SvgA.fill "#00aaaa"
+                ]
+                []
+            , Svg.circle
+                [ SvgA.cx <| toString model.cursor_position.x
+                , SvgA.cy <| toString model.cursor_position.y
+                , SvgA.r "40"
+                , SvgA.fill "#00cccc"
+                ]
+                []
+            ]
         , Html.div
-            [ Html.Events.onClick MouseClicked
-            , onMouseMove MouseMove
-            , HtmlA.style
-                [ ( "background-color", "aliceblue" )
-                , ( "width", "200px" )
-                , ( "height", "200px" )
+            [ HtmlA.style
+                [ ( "position", "absolute" )
+                , ( "top", "1em" )
+                , ( "left", "1em" )
                 ]
             ]
-            [ Html.text <| toString model
-            , Html.input [ Html.Events.onInput Change ] []
-            ]
-        , Html.div [ HtmlA.class "drawing-area", onMouseMove MouseMove ]
-            [ Svg.svg
-                [ SvgA.width "200px"
-                , SvgA.height "200px"
-                , SvgA.viewBox "0 0 200 200"
-                ]
-                [ Svg.rect
-                    [ SvgA.x "0"
-                    , SvgA.y "0"
-                    , SvgA.width "200"
-                    , SvgA.height "200"
-                    , SvgA.fill "#00aaaa"
-                    ]
-                    []
-                , Svg.circle
-                    [ SvgA.cx <| toString model.cursor_position.x
-                    , SvgA.cy <| toString model.cursor_position.y
-                    , SvgA.r "40"
-                    , SvgA.fill "#00cccc"
-                    ]
-                    []
-                ]
-            ]
+            [ Html.text <| toString model ]
         ]
 
 
