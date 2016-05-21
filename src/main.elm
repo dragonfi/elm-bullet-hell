@@ -10,21 +10,39 @@ import Platform.Sub as Sub
 import Mouse
 import Window
 import Task
+import Vector2D
 
 
-type alias Position =
+type alias MousePosition =
     { x : Int
     , y : Int
     }
 
 
+type alias Player =
+    { position : Vector2D.Vector2D
+    , max_speed : Float
+    }
+
+
+type alias Bullet =
+    { position : Vector2D.Vector2D
+    , speed : Float
+    }
+
+
 type alias Model =
-    { cursor_position : Position, mouse_clicks : Int, input : String, window_size : Window.Size }
+    { cursor_position : Vector2D.Vector2D
+    , player : Player
+    , mouse_clicks : Int
+    , window_size : Window.Size
+    , bullets : List Bullet
+    }
 
 
 type Message
     = Tick Time.Time
-    | MouseMove Position
+    | MouseMove MousePosition
     | WindowResize Window.Size
     | MouseClicked
     | Change String
@@ -34,7 +52,7 @@ type Message
 subscriptions : Model -> Sub Message
 subscriptions model =
     Sub.batch
-        [ Time.every (50 * Time.millisecond) Tick
+        [ Time.every (10 * Time.millisecond) Tick
         , Mouse.moves MouseMove
         , Window.resizes WindowResize
         ]
@@ -42,26 +60,54 @@ subscriptions model =
 
 init : ( Model, Cmd Message )
 init =
-    ( Model (Position 0 0) 0 "" (Window.Size 0 0), Task.perform Error WindowResize Window.size )
+    ( { cursor_position = (Vector2D.Vector2D 0 0)
+      , player = Player (Vector2D.Vector2D 0 0) 4
+      , mouse_clicks = 0
+      , window_size = Window.Size 0 0
+      , bullets = []
+      }
+    , Task.perform Error WindowResize Window.size
+    )
 
 
 update : Message -> Model -> ( Model, Cmd msg )
 update msg model =
     case msg of
-        MouseMove cursor_position ->
-            ( { model | cursor_position = cursor_position }, Cmd.none )
+        MouseMove { x, y } ->
+            ( { model | cursor_position = Vector2D.Vector2D (toFloat x) (toFloat y) }, Cmd.none )
 
         MouseClicked ->
             ( { model | mouse_clicks = model.mouse_clicks + 1 }, Cmd.none )
 
-        Change x ->
-            ( { model | input = x }, Cmd.none )
-
         WindowResize size ->
             ( { model | window_size = size }, Cmd.none )
 
+        Tick time ->
+            ( { model
+                | player = updatePlayer model.player time model.cursor_position
+                , bullets = List.map (updateBullet time model.player.position) model.bullets
+              }
+            , Cmd.none
+            )
+
         _ ->
             ( model, Cmd.none )
+
+
+updatePlayer : Player -> Time.Time -> Vector2D.Vector2D -> Player
+updatePlayer player time cursor_position =
+    let
+        cursor_delta =
+            Vector2D.sub cursor_position player.position |> Vector2D.normalize
+    in
+        { player
+            | position = Vector2D.add player.position cursor_delta
+        }
+
+
+updateBullet : Time.Time -> Vector2D.Vector2D -> Bullet -> Bullet
+updateBullet time player_position bullet =
+    bullet
 
 
 view : Model -> Html.Html Message
@@ -85,10 +131,17 @@ view model =
                 ]
                 []
             , Svg.circle
-                [ SvgA.cx <| toString model.cursor_position.x
-                , SvgA.cy <| toString model.cursor_position.y
+                [ SvgA.cx <| toString model.player.position.x
+                , SvgA.cy <| toString model.player.position.y
                 , SvgA.r "40"
                 , SvgA.fill "#00cccc"
+                ]
+                []
+            , Svg.circle
+                [ SvgA.cx <| toString model.cursor_position.x
+                , SvgA.cy <| toString model.cursor_position.y
+                , SvgA.r "10"
+                , SvgA.fill "#00ffff"
                 ]
                 []
             ]
