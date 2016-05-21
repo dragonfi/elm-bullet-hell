@@ -84,7 +84,7 @@ update msg model =
 
         Tick time ->
             ( { model
-                | player = updatePlayer model.player time model.cursor_position
+                | player = updatePlayer time model.cursor_position model.player
                 , bullets = List.map (updateBullet time model.player.position) model.bullets
               }
             , Cmd.none
@@ -94,11 +94,11 @@ update msg model =
             ( model, Cmd.none )
 
 
-updatePlayer : Player -> Time.Time -> Vector2D.Vector2D -> Player
-updatePlayer player time cursor_position =
+updatePlayer : Time.Time -> Vector2D.Vector2D -> Player -> Player
+updatePlayer time cursor_position player =
     let
         cursor_delta =
-            Vector2D.sub cursor_position player.position |> Vector2D.normalize
+            Vector2D.sub cursor_position player.position |> Vector2D.limitMagnitude player.max_speed
     in
         { player
             | position = Vector2D.add player.position cursor_delta

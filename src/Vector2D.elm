@@ -1,4 +1,4 @@
-module Vector2D exposing (Vector2D, vec, add, mul, sub, div, magnitude, normalize)
+module Vector2D exposing (Vector2D, vec, add, mul, sub, div, magnitude, normalize, limitMagnitude)
 
 
 type alias Vector2D =
@@ -39,4 +39,19 @@ magnitude { x, y } =
 
 normalize : Vector2D -> Vector2D
 normalize vector =
-    div (magnitude vector) vector
+    if (magnitude vector) == 0 then
+        vec 0 1
+    else
+        div (magnitude vector) vector
+
+
+limitMagnitude : Float -> Vector2D -> Vector2D
+limitMagnitude maximum_magnitude vector =
+    let
+        actual_magnitude =
+            magnitude vector
+    in
+        if actual_magnitude < maximum_magnitude then
+            vector
+        else
+            div (actual_magnitude / maximum_magnitude) vector
